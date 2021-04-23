@@ -1,6 +1,6 @@
 import csv
 import os
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from time import gmtime, strftime
 
 import scrapy
@@ -58,7 +58,8 @@ class GithubCrawlSpider(scrapy.Spider):
             desc = repo.css("p[itemprop=description]::text").get()
 
             date = repo.css("div.f6.color-text-secondary.mt-2 > relative-time::attr(datetime)").get()
-            updated = datetime.now() - datetime.strptime(date, '%Y-%m-%dT%H:%M:%SZ')
+            PST = timezone(timedelta(hours=8))
+            updated = datetime.now(tz=PST) - (datetime.strptime(date, '%Y-%m-%dT%H:%M:%S%z'))
 
             language = repo.css(
                 "div.f6.color-text-secondary.mt-2 > span > span[itemprop=programmingLanguage]::text").get()
