@@ -10,6 +10,13 @@ from scrapy.crawler import CrawlerProcess
 from info import *
 
 
+def str_format_delta(td, fmt):
+    d = {"days": td.days}
+    d["hours"], rem_minutes = divmod(td.seconds, 3600)
+    d["minutes"], d["seconds"] = divmod(rem_minutes, 60)
+    return fmt.format(**d)
+
+
 def write_to_csv(filename, column_header, data):
     file_exists = os.path.exists(f"{filename}.csv")
 
@@ -57,9 +64,12 @@ class GithubCrawlSpider(scrapy.Spider):
             title = repo.css("div.d-inline-block.mb-1 > h3 > a::text").get().strip()
             desc = repo.css("p[itemprop=description]::text").get()
 
-            date = repo.css("div.f6.color-text-secondary.mt-2 > relative-time::attr(datetime)").get()
+            dt = repo.css("div.f6.color-text-secondary.mt-2 > relative-time::attr(datetime)").get()
             PST = timezone(timedelta(hours=8))
-            updated = datetime.now(tz=PST) - (datetime.strptime(date, '%Y-%m-%dT%H:%M:%S%z'))
+            updated = datetime.now(tz=PST) - (datetime.strptime(dt, '%Y-%m-%dT%H:%M:%S%z'))
+
+            fmt = "{days} day(s) {hours} hour(s) and {minutes} minute(s) ago"
+            formatted_updated = str_format_delta(updated, fmt)
 
             language = repo.css(
                 "div.f6.color-text-secondary.mt-2 > span > span[itemprop=programmingLanguage]::text").get()
@@ -67,11 +77,11 @@ class GithubCrawlSpider(scrapy.Spider):
             url = "https://github.com" + repo.css("div.d-inline-block.mb-1 > h3 > a::attr(href)").get()
 
             if desc is not None:
-                write_to_csv(filename, column_header, [title, desc.strip(), updated, language, url])
-                write_to_md(filename, [title, desc.strip(), updated, language, url])
+                write_to_csv(filename, column_header, [title, desc.strip(), formatted_updated, language, url])
+                write_to_md(filename, [title, desc.strip(), formatted_updated, language, url])
             else:
-                write_to_csv(filename, column_header, [title, "No Description", updated, language, url])
-                write_to_md(filename, [title, "No Description", updated, language, url])
+                write_to_csv(filename, column_header, [title, "No Description", formatted_updated, language, url])
+                write_to_md(filename, [title, "No Description", formatted_updated, language, url])
 
         pagination = response.css(
             "#user-repositories-list > div.paginate-container > div[data-test-selector=pagination] > a")
