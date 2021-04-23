@@ -35,7 +35,7 @@ class GithubCrawlSpider(scrapy.Spider):
             writer = csv.writer(file)
 
             if not file_exists:
-                writer.writerow(["Name", "Description", "Updated"])
+                writer.writerow(["Name", "Description", "Updated", "Link"])
 
             repo_details = response.css("#user-repositories-list > ul > li > div.col-10.col-lg-9.d-inline-block")
             for repo in repo_details:
@@ -45,10 +45,12 @@ class GithubCrawlSpider(scrapy.Spider):
                 date = repo.css("div.f6.color-text-secondary.mt-2 > relative-time::attr(datetime)").get()
                 updated = datetime.now() - datetime.strptime(date, '%Y-%m-%dT%H:%M:%SZ')
 
+                url = "https://github.com" + repo.css("div.d-inline-block.mb-1 > h3 > a::attr(href)").get()
+
                 if desc is not None:
-                    writer.writerow([title, desc.strip(), updated])
+                    writer.writerow([title, desc.strip(), updated, url])
                 else:
-                    writer.writerow([title, 'No description', updated])
+                    writer.writerow([title, 'No description', updated, url])
 
         pagination = response.css(
             "#user-repositories-list > div.paginate-container > div[data-test-selector=pagination] > a")
