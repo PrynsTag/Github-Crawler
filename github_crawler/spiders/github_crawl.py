@@ -1,5 +1,4 @@
 from datetime import datetime
-from time import gmtime, strftime
 
 import pandas as pd
 import scrapy
@@ -30,26 +29,6 @@ def write_to_md(df_proj, filename):
             file.write(f"###### Language: {language}\n")
             file.write(f"###### Updated: {date_updated}\n")
             file.write(f"### {desc}\n")
-
-
-def init_project(filename, df_repo):
-    py_df = df_repo[(df_repo["Language"] == "Python") | (df_repo["Language"] == "Jupyter Notebook")]
-    py_filename = f"{filename} Python-Projects.md"
-    write_to_md(py_df, py_filename)
-
-    kt_df = df_repo[(df_repo["Language"] == "Kotlin")]
-    kt_filename = f"{filename} Kotlin-Projects.md"
-    write_to_md(kt_df, kt_filename)
-
-    php_df = df_repo[(df_repo["Language"] == "PHP")]
-    php_filename = f"{filename} PHP-Projects.md"
-    write_to_md(php_df, php_filename)
-
-    front_end_df = df_repo[(df_repo["Language"] == "HTML") |
-                           (df_repo["Language"] == "CSS") |
-                           (df_repo["Language"] == "Javascript")]
-    front_end_filename = f"{filename} Front-End-Projects.md"
-    write_to_md(front_end_df, front_end_filename)
 
 
 class GithubCrawlSpider(scrapy.Spider):
@@ -92,17 +71,28 @@ class GithubCrawlSpider(scrapy.Spider):
         if pagination.css("::text").get() == "Next":
             yield response.follow(pagination.css("::attr(href)").get(), callback=self.parse_repo)
 
-        filename = f"[{strftime('%Y-%m-%d', gmtime())}]"
+    def start_writing_files(self):
         column_header = ["Title", "Description", "Updated", "Language", "Link"]
-
         df_repo = pd.DataFrame(self.repo_list, columns=column_header)
         df_repo = df_repo.sort_values(by=["Language", "Updated"], ascending=False, ignore_index=True)
 
-        init_project(filename, df_repo)
-        df_repo.to_csv(f"{filename} Github-Repo.csv", index=False, header=column_header)
+        df_repo.to_csv("Github-Repo.csv", index=False, header=column_header)
+
+        py_df = df_repo[(df_repo["Language"] == "Python") | (df_repo["Language"] == "Jupyter Notebook")]
+        kt_df = df_repo[df_repo["Language"] == "Kotlin"]
+        php_df = df_repo[df_repo["Language"] == "PHP"]
+        front_end_df = df_repo[(df_repo["Language"] == "HTML") |
+                               (df_repo["Language"] == "CSS") |
+                               (df_repo["Language"] == "Javascript")]
+
+        write_to_md(py_df, "Python-Projects.md")
+        write_to_md(kt_df, "Kotlin-Projects.md")
+        write_to_md(php_df, "PHP-Projects.md")
+        write_to_md(front_end_df, "Front-End-Projects.md")
 
 
 if __name__ == "__main__":
     process = CrawlerProcess()
     process.crawl(GithubCrawlSpider)
     process.start()
+    GithubCrawlSpider().start_writing_files()
