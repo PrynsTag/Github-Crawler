@@ -17,17 +17,39 @@ def str_format_delta(td, fmt):
     return fmt.format(**d)
 
 
-def write_to_md(filename, df_repo):
-    with open(filename, 'a') as file:
-        fmt = "{days} day(s) {hours} hour(s) and {minutes} minute(s) ago"
-        for row in df_repo.itertuples(index=False):
-            title, desc, dt_updated, language, link = row
-            updated = (datetime.now(tz.gettz("Asia/Manila")) - datetime.strptime(dt_updated, '%Y-%m-%dT%H:%M:%S%z'))
+def write_to_md(df_proj, filename):
+    for row in df_proj.itertuples(index=False):
+        title, desc, dt_updated, language, link = row
 
+        dt = (datetime.now(tz.gettz("Asia/Manila")) - datetime.strptime(dt_updated, '%Y-%m-%dT%H:%M:%S%z'))
+        fmt = "{days} day(s) {hours} hour(s) and {minutes} minute(s) ago"
+        date_updated = str_format_delta(dt, fmt)
+
+        with open(filename, 'a') as file:
             file.write(f"# [{title}]({link})\n")
             file.write(f"###### Language: {language}\n")
-            file.write(f"###### Updated: {str_format_delta(updated, fmt)}\n")
+            file.write(f"###### Updated: {date_updated}\n")
             file.write(f"### {desc}\n")
+
+
+def init_project(filename, df_repo):
+    py_df = df_repo[(df_repo["Language"] == "Python") | (df_repo["Language"] == "Jupyter Notebook")]
+    py_filename = f"{filename} Python-Projects.md"
+    write_to_md(py_df, py_filename)
+
+    kt_df = df_repo[(df_repo["Language"] == "Kotlin")]
+    kt_filename = f"{filename} Kotlin-Projects.md"
+    write_to_md(kt_df, kt_filename)
+
+    php_df = df_repo[(df_repo["Language"] == "PHP")]
+    php_filename = f"{filename} PHP-Projects.md"
+    write_to_md(php_df, php_filename)
+
+    front_end_df = df_repo[(df_repo["Language"] == "HTML") |
+                           (df_repo["Language"] == "CSS") |
+                           (df_repo["Language"] == "Javascript")]
+    front_end_filename = f"{filename} Front-End-Projects.md"
+    write_to_md(front_end_df, front_end_filename)
 
 
 class GithubCrawlSpider(scrapy.Spider):
@@ -70,14 +92,14 @@ class GithubCrawlSpider(scrapy.Spider):
         if pagination.css("::text").get() == "Next":
             yield response.follow(pagination.css("::attr(href)").get(), callback=self.parse_repo)
 
-        filename = f"[{strftime('%Y-%m-%d', gmtime())}] github_repo"
+        filename = f"[{strftime('%Y-%m-%d', gmtime())}]"
         column_header = ["Title", "Description", "Updated", "Language", "Link"]
 
         df_repo = pd.DataFrame(self.repo_list, columns=column_header)
         df_repo = df_repo.sort_values(by=["Language", "Updated"], ascending=False, ignore_index=True)
 
-        write_to_md(f"{filename}.md", df_repo)
-        df_repo.to_csv(f"{filename}.csv", index=False, header=column_header)
+        init_project(filename, df_repo)
+        df_repo.to_csv(f"{filename} Github-Repo.csv", index=False, header=column_header)
 
 
 if __name__ == "__main__":
