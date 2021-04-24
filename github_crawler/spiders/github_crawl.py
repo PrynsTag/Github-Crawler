@@ -1,9 +1,10 @@
 import csv
 import os
-from datetime import datetime, timezone, timedelta
+from datetime import datetime
 from time import gmtime, strftime
 
 import scrapy
+from dateutil import tz
 from scrapy import FormRequest
 from scrapy.crawler import CrawlerProcess
 
@@ -12,8 +13,8 @@ from info import *
 
 def str_format_delta(td, fmt):
     d = {"days": td.days}
-    d["hours"], rem_minutes = divmod(td.seconds, 3600)
-    d["minutes"], d["seconds"] = divmod(rem_minutes, 60)
+    d["hours"], rem_seconds = divmod(td.seconds, 3600)
+    d["minutes"], d["seconds"] = divmod(rem_seconds, 60)
     return fmt.format(**d)
 
 
@@ -65,8 +66,7 @@ class GithubCrawlSpider(scrapy.Spider):
             desc = repo.css("p[itemprop=description]::text").get()
 
             dt = repo.css("div.f6.color-text-secondary.mt-2 > relative-time::attr(datetime)").get()
-            PST = timezone(timedelta(hours=8))
-            updated = datetime.now(tz=PST) - (datetime.strptime(dt, '%Y-%m-%dT%H:%M:%S%z'))
+            updated = datetime.now(tz.gettz("Asia/Manila")) - datetime.strptime(dt, '%Y-%m-%dT%H:%M:%S%z')
 
             fmt = "{days} day(s) {hours} hour(s) and {minutes} minute(s) ago"
             formatted_updated = str_format_delta(updated, fmt)
