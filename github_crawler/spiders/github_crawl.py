@@ -1,8 +1,7 @@
-import csv
-import os
 from datetime import datetime
 from time import gmtime, strftime
 
+import pandas as pd
 import scrapy
 from dateutil import tz
 from scrapy import FormRequest
@@ -18,30 +17,23 @@ def str_format_delta(td, fmt):
     return fmt.format(**d)
 
 
-def write_to_csv(filename, column_header, data):
-    file_exists = os.path.exists(f"{filename}.csv")
+def write_to_md(filename, df_repo):
+    with open(filename, 'a') as file:
+        fmt = "{days} day(s) {hours} hour(s) and {minutes} minute(s) ago"
+        for row in df_repo.itertuples(index=False):
+            title, desc, dt_updated, language, link = row
+            updated = (datetime.now(tz.gettz("Asia/Manila")) - datetime.strptime(dt_updated, '%Y-%m-%dT%H:%M:%S%z'))
 
-    with open(f"{filename}.csv", 'a') as file:
-        writer = csv.writer(file)
-        if not file_exists:
-            writer.writerow(column_header)
-
-        writer.writerow(data)
-
-
-def write_to_md(filename, data):
-    title, desc, updated, language, link = data
-
-    with open(f"{filename}.md", 'a') as file:
-        file.write(f"# [{title}]({link})\n")
-        file.write(f"###### Language: {language}\n")
-        file.write(f"###### Updated: {updated}\n")
-        file.write(f"### {desc.strip()}\n")
+            file.write(f"# [{title}]({link})\n")
+            file.write(f"###### Language: {language}\n")
+            file.write(f"###### Updated: {str_format_delta(updated, fmt)}\n")
+            file.write(f"### {desc}\n")
 
 
 class GithubCrawlSpider(scrapy.Spider):
     name = 'github-crawl'
     start_urls = ["https://github.com/login"]
+    repo_list = []
 
     def parse(self, response, **kwargs):
         token = response.css(
@@ -57,37 +49,35 @@ class GithubCrawlSpider(scrapy.Spider):
         yield response.follow(response.url + f"/{login}?tab=repositories&type=source", callback=self.parse_repo)
 
     def parse_repo(self, response):
-        filename = f"[{strftime('%Y-%m-%d', gmtime())}] github_repo"
-        column_header = ["Title", "Description", "Updated", "Language", "Link"]
-
         repo_details = response.css("#user-repositories-list > ul > li > div.col-10.col-lg-9.d-inline-block")
         for repo in repo_details:
             title = repo.css("div.d-inline-block.mb-1 > h3 > a::text").get().strip()
+
             desc = repo.css("p[itemprop=description]::text").get()
+            desc = "No Description" if desc is None else desc.strip()
 
             dt = repo.css("div.f6.color-text-secondary.mt-2 > relative-time::attr(datetime)").get()
-            updated = datetime.now(tz.gettz("Asia/Manila")) - datetime.strptime(dt, '%Y-%m-%dT%H:%M:%S%z')
-
-            fmt = "{days} day(s) {hours} hour(s) and {minutes} minute(s) ago"
-            formatted_updated = str_format_delta(updated, fmt)
 
             language = repo.css(
                 "div.f6.color-text-secondary.mt-2 > span > span[itemprop=programmingLanguage]::text").get()
 
             url = "https://github.com" + repo.css("div.d-inline-block.mb-1 > h3 > a::attr(href)").get()
 
-            if desc is not None:
-                write_to_csv(filename, column_header, [title, desc.strip(), formatted_updated, language, url])
-                write_to_md(filename, [title, desc.strip(), formatted_updated, language, url])
-            else:
-                write_to_csv(filename, column_header, [title, "No Description", formatted_updated, language, url])
-                write_to_md(filename, [title, "No Description", formatted_updated, language, url])
+            self.repo_list.append([title, desc, dt, language, url])
 
         pagination = response.css(
             "#user-repositories-list > div.paginate-container > div[data-test-selector=pagination] > a")
-
         if pagination.css("::text").get() == "Next":
             yield response.follow(pagination.css("::attr(href)").get(), callback=self.parse_repo)
+
+        filename = f"[{strftime('%Y-%m-%d', gmtime())}] github_repo"
+        column_header = ["Title", "Description", "Updated", "Language", "Link"]
+
+        df_repo = pd.DataFrame(self.repo_list, columns=column_header)
+        df_repo = df_repo.sort_values(by=["Language", "Updated"], ascending=False, ignore_index=True)
+
+        write_to_md(f"{filename}.md", df_repo)
+        df_repo.to_csv(f"{filename}.csv", index=False, header=column_header)
 
 
 if __name__ == "__main__":
