@@ -6,8 +6,6 @@ from dateutil import tz
 from scrapy import FormRequest
 from scrapy.crawler import CrawlerProcess
 
-from info import *
-
 
 def str_format_delta(td, fmt):
     d = {"days": td.days}
@@ -34,20 +32,25 @@ def write_to_md(df_proj, filename):
 class GithubCrawlSpider(scrapy.Spider):
     name = 'github-crawl'
     start_urls = ["https://github.com/login"]
-    repo_list = []
+
+    def __init__(self, login, password, *args, **kwargs):
+        super(GithubCrawlSpider, self).__init__(*args, **kwargs)
+        self.password = password
+        self.login = login
+        self.repo_list = []
 
     def parse(self, response, **kwargs):
         token = response.css(
-            "#login > div.auth-form-body.mt-3 > form > input[type=hidden]:nth-child(1)::attr(value)").get()
+            "login > div.auth-form-body.mt-3 > form > input[type=hidden]:nth-child(1)::attr(value)").get()
 
         yield FormRequest.from_response(response, formdata={
             "authenticity_token": token,
-            "login": login,
-            "password": password
+            "login": self.login,
+            "password": self.password
         }, callback=self.after_login)
 
     def after_login(self, response):
-        yield response.follow(response.url + f"/{login}?tab=repositories&type=source", callback=self.parse_repo)
+        yield response.follow(response.url + f"/{self.login}?tab=repositories&type=source", callback=self.parse_repo)
 
     def parse_repo(self, response):
         repo_details = response.css("#user-repositories-list > ul > li > div.col-10.col-lg-9.d-inline-block")
@@ -70,6 +73,8 @@ class GithubCrawlSpider(scrapy.Spider):
             "#user-repositories-list > div.paginate-container > div[data-test-selector=pagination] > a")
         if pagination.css("::text").get() == "Next":
             yield response.follow(pagination.css("::attr(href)").get(), callback=self.parse_repo)
+        else:
+            self.start_writing_files()
 
     def start_writing_files(self):
         column_header = ["Title", "Description", "Updated", "Language", "Link"]
@@ -95,4 +100,3 @@ if __name__ == "__main__":
     process = CrawlerProcess()
     process.crawl(GithubCrawlSpider)
     process.start()
-    GithubCrawlSpider().start_writing_files()
