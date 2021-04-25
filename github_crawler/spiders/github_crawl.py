@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 
 import pandas as pd
@@ -15,14 +16,14 @@ def str_format_delta(td, fmt):
 
 
 def write_to_md(df_proj, filename):
-    for row in df_proj.itertuples(index=False):
-        title, desc, dt_updated, language, link = row
+    with open(filename, 'w') as file:
+        for row in df_proj.itertuples(index=False):
+            title, desc, dt_updated, language, link = row
 
-        dt = (datetime.now(tz.gettz("Asia/Manila")) - datetime.strptime(dt_updated, '%Y-%m-%dT%H:%M:%S%z'))
-        fmt = "{days} day(s) {hours} hour(s) and {minutes} minute(s) ago"
-        date_updated = str_format_delta(dt, fmt)
+            dt = (datetime.now(tz.gettz("Asia/Manila")) - datetime.strptime(dt_updated, '%Y-%m-%dT%H:%M:%S%z'))
+            fmt = "{days} day(s) {hours} hour(s) and {minutes} minute(s) ago"
+            date_updated = str_format_delta(dt, fmt)
 
-        with open(filename, 'a') as file:
             file.write(f"# [{title}]({link})\n")
             file.write(f"###### Language: {language}\n")
             file.write(f"###### Updated: {date_updated}\n")
@@ -31,26 +32,36 @@ def write_to_md(df_proj, filename):
 
 class GithubCrawlSpider(scrapy.Spider):
     name = 'github-crawl'
-    start_urls = ["https://github.com/login"]
+    allowed_domains = ["github.com"]
+    start_urls = ["https://github.com"]
 
-    def __init__(self, login, password, *args, **kwargs):
+    def __init__(self, username, password, *args, **kwargs):
         super(GithubCrawlSpider, self).__init__(*args, **kwargs)
+        self.username = username
         self.password = password
-        self.login = login
         self.repo_list = []
+        self.header = {
+            "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
+                          "Chrome/89.0.4389.128 Safari/537.36 OPR/75.0.3969.218 ",
+            "referer": "https://github.com/"}
+        logger = logging.getLogger('scrapy.spidermiddlewares.httperror')
+        logger.setLevel(logging.WARNING)
 
     def parse(self, response, **kwargs):
-        token = response.css(
-            "login > div.auth-form-body.mt-3 > form > input[type=hidden]:nth-child(1)::attr(value)").get()
+        login = response.css(".HeaderMenu-link.flex-shrink-0.no-underline.mr-3::attr(href)").get()
+        yield response.follow(response.url + login, headers=self.header, callback=self.login)
 
+    def login(self, response):
+        token = response.css(".authenticity_token::attr(value)").get()
+        print(token)
         yield FormRequest.from_response(response, formdata={
             "authenticity_token": token,
-            "login": self.login,
+            "login": self.username,
             "password": self.password
         }, callback=self.after_login)
 
     def after_login(self, response):
-        yield response.follow(response.url + f"/{self.login}?tab=repositories&type=source", callback=self.parse_repo)
+        yield response.follow(response.url + f"/{self.username}?tab=repositories&type=source", callback=self.parse_repo)
 
     def parse_repo(self, response):
         repo_details = response.css("#user-repositories-list > ul > li > div.col-10.col-lg-9.d-inline-block")
