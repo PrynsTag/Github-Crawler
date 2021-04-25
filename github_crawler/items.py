@@ -6,7 +6,7 @@
 import scrapy
 
 
-class UdemyCrawlerItem(scrapy.Item):
+class GithubCrawlerItem(scrapy.Item):
     # define the fields for your item here like:
     # name = scrapy.Field()
     pass
