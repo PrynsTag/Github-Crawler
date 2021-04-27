@@ -1,4 +1,3 @@
-import logging
 from datetime import datetime
 
 import pandas as pd
@@ -6,6 +5,7 @@ import scrapy
 from dateutil import tz
 from scrapy import FormRequest
 from scrapy.crawler import CrawlerProcess
+from scrapy.utils.project import get_project_settings
 
 
 def str_format_delta(td, fmt):
@@ -33,27 +33,16 @@ def write_to_md(df_proj, filename):
 class GithubCrawlSpider(scrapy.Spider):
     name = 'github-crawl'
     allowed_domains = ["github.com"]
-    start_urls = ["https://github.com"]
+    start_urls = ["https://www.github.com/login"]
 
     def __init__(self, username, password, *args, **kwargs):
         super(GithubCrawlSpider, self).__init__(*args, **kwargs)
         self.username = username
         self.password = password
         self.repo_list = []
-        self.header = {
-            "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
-                          "Chrome/89.0.4389.128 Safari/537.36 OPR/75.0.3969.218 ",
-            "referer": "https://github.com/"}
-        logger = logging.getLogger('scrapy.spidermiddlewares.httperror')
-        logger.setLevel(logging.WARNING)
 
     def parse(self, response, **kwargs):
-        login = response.css(".HeaderMenu-link.flex-shrink-0.no-underline.mr-3::attr(href)").get()
-        yield response.follow(response.url + login, headers=self.header, callback=self.login)
-
-    def login(self, response):
-        token = response.css(".authenticity_token::attr(value)").get()
-        print(token)
+        token = response.xpath("//input[@name=\"authenticity_token\"]/@value").get()
         yield FormRequest.from_response(response, formdata={
             "authenticity_token": token,
             "login": self.username,
@@ -108,6 +97,8 @@ class GithubCrawlSpider(scrapy.Spider):
 
 
 if __name__ == "__main__":
-    process = CrawlerProcess()
-    process.crawl(GithubCrawlSpider)
+    username = input("Enter your Github Username: ")
+    password = input("Enter your Github Password: ")
+    process = CrawlerProcess(settings=get_project_settings())
+    process.crawl(GithubCrawlSpider, username, password)
     process.start()
